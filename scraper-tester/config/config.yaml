@@ -4,11 +4,11 @@
 # Change THIS variable to scrape a different location.
 # =============================================================================
 
-LOCATION: "Atlanta, Georgia"
+LOCATION: "Regional New South Wales, Australia"
 
 # Target unique results — scraper retries up to MAX_RETRIES times if under this
-MIN_UNIQUE_RESULTS: 500
-MAX_RETRIES: 3
+MIN_UNIQUE_RESULTS: 300
+MAX_RETRIES: 2
 
 # Search queries - many variations to maximize unique results
 # {location} is replaced with the LOCATION value above.
@@ -83,8 +83,6 @@ SEARCH_QUERIES:
 # Search engines to use
 SEARCH_ENGINES:
   - duckduckgo
-  - startpage
-  - mojeek
 
 # Results per query per engine
 MAX_RESULTS_PER_QUERY: 25

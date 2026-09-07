@@ -41,7 +41,7 @@ except Exception:
 app = FastAPI(
     title="Real Estate Company Scraper API",
     description=(
-        "Searches multiple search engines (DuckDuckGo, Startpage, Mojeek) "
+        "Searches DuckDuckGo for real estate company websites "
         "to find real estate, realtor, and property dealer company websites "
         "for any location worldwide.\n\n"
         "## Quick Start\n"
@@ -81,9 +81,9 @@ class ScrapeRequest(BaseModel):
         examples=[["coffee shop {location}", "restaurant {location}", "gym {location}"]],
     )
     engines: list[str] = Field(
-        default=["duckduckgo", "startpage", "mojeek"],
-        description="Search engines to use. Options: duckduckgo, startpage, mojeek",
-        examples=[["duckduckgo", "startpage", "mojeek"]],
+        default=["duckduckgo"],
+        description="Search engines to use. Options: duckduckgo",
+        examples=[["duckduckgo"]],
     )
     max_results_per_query: int = Field(
         default=25,
@@ -334,7 +334,7 @@ async def health():
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "total_runs": len(RUNS),
-        "engines_available": ["duckduckgo", "startpage", "mojeek"],
+        "engines_available": ["duckduckgo"],
         "google_sheets": SHEETS_AVAILABLE,
     }
 

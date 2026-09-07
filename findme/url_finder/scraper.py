@@ -8,8 +8,6 @@ from urllib.parse import urlparse
 
 from scraper_config import Config
 from engines.duckduckgo import DuckDuckGoEngine
-from engines.startpage import StartpageEngine
-from engines.mojeek import MojeekEngine
 
 
 # ---------------------------------------------------------------------------
@@ -118,8 +116,6 @@ def _score_result(url: str, title: str, snippet: str, location: str) -> int:
 
 ENGINE_MAP = {
     "duckduckgo": DuckDuckGoEngine,
-    "startpage": StartpageEngine,
-    "mojeek": MojeekEngine,
 }
 
 

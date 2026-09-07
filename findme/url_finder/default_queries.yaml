@@ -83,8 +83,6 @@ SEARCH_QUERIES:
 # Search engines to use
 SEARCH_ENGINES:
   - duckduckgo
-  - startpage
-  - mojeek
 
 # Results per query per engine
 MAX_RESULTS_PER_QUERY: 25

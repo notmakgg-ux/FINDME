@@ -8,8 +8,6 @@ from urllib.parse import urlparse
 
 from src.config import Config
 from src.engines.duckduckgo import DuckDuckGoEngine
-from src.engines.startpage import StartpageEngine
-from src.engines.mojeek import MojeekEngine
 
 
 # ---------------------------------------------------------------------------
@@ -118,8 +116,6 @@ def _score_result(url: str, title: str, snippet: str, location: str) -> int:
 
 ENGINE_MAP = {
     "duckduckgo": DuckDuckGoEngine,
-    "startpage": StartpageEngine,
-    "mojeek": MojeekEngine,
 }
 
 

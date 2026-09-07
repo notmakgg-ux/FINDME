@@ -4,7 +4,7 @@ FINDME API
 Unified API for the FINDME Real Estate Discovery Pipeline.
 
 Modules:
-  - URL Finder: Searches DuckDuckGo, Startpage, Mojeek for company websites
+  - URL Finder: Searches DuckDuckGo for company websites
   - Email Crawler: Crawls found websites to discover email contacts
 
 Run with:
@@ -36,14 +36,14 @@ from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
-# Load .env from findme/ directory
-load_dotenv(Path(__file__).parent / ".env")
+# Load .env from project root
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 # Add module paths BEFORE any imports
 _findme_dir = str(Path(__file__).parent)
 _url_finder_dir = str(Path(__file__).parent / "url_finder")
-_email_crawler_dir = str(Path(__file__).parent / "email_crawler")
-for _p in [_findme_dir, _url_finder_dir, _email_crawler_dir]:
+_crawler_dir = str(Path(__file__).parent.parent / "crawler")
+for _p in [_findme_dir, _url_finder_dir, _crawler_dir]:
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
@@ -58,16 +58,15 @@ try:
 except Exception:
     SHEETS_AVAILABLE = False
 
-# --- Email Crawler imports ---
-from email_crawler.config import settings as ec_settings
-from email_crawler.storage import (
+# --- Email Crawler imports (from crawler/ directory) ---
+from config import settings as ec_settings
+from storage import (
     read_input_companies as ec_read_input,
     write_results as ec_write_results,
-    get_all_sheet_names as ec_get_sheets,
-    get_spreadsheet as ec_get_spreadsheet,
-    RESULTS_HEADERS_FRIENDLY,
+    get_completed_websites as ec_get_completed,
+    get_stats as ec_get_stats,
 )
-from email_crawler.pipeline import process_companies as ec_process_companies
+from pipeline import process_companies as ec_process_companies
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +78,7 @@ app = FastAPI(
     title="FINDME API",
     description=(
         "FINDME - Real Estate Discovery Pipeline\n\n"
-        "**Module 1: URL Finder** - Searches DuckDuckGo, Startpage, Mojeek "
+        "**Module 1: URL Finder** - Searches DuckDuckGo "
         "to find real estate company websites for any location.\n\n"
         "**Module 2: Email Crawler** - Crawls discovered websites to extract, "
         "classify, validate, and score email contacts.\n\n"
@@ -143,8 +142,8 @@ class ScrapeRequest(BaseModel):
                    "When True, queries are used as-is without any placeholder replacement.",
     )
     engines: list[str] = Field(
-        default=["duckduckgo", "startpage", "mojeek"],
-        description="Search engines: duckduckgo, startpage, mojeek",
+        default=["duckduckgo"],
+        description="Search engines: duckduckgo",
     )
     max_results_per_query: int = Field(default=25, ge=1, le=100)
     min_score: int = Field(default=1, ge=-10, le=50)
@@ -237,15 +236,14 @@ def _run_email_crawler(location: str, results_sheet: str, companies: list[dict],
             loop.close()
         duration = round(time.time() - start, 2)
 
-        # Write to Google Sheets
+        # Write to PostgreSQL
         try:
-            ec_write_results(results, sheet_name=results_sheet)
-            print(f"[Email Crawler] Wrote {len(results)} results to '{results_sheet}'")
+            ec_write_results(results)
+            print(f"[Email Crawler] Wrote {len(results)} results to PostgreSQL database")
         except Exception as e:
-            print(f"[Email Crawler] Error writing to sheets: {e}")
+            print(f"[Email Crawler] Error writing to database: {e}")
 
         # Write summary.txt
-        from email_crawler.storage import _format_results_sheet
         _write_summary_file(results)
 
         total_emails = sum(r.emails_found for r in results)
@@ -597,7 +595,7 @@ async def health():
         "status": "healthy",
         "version": "1.0.0",
         "modules": ["url_finder", "email_crawler"],
-        "engines": ["duckduckgo", "startpage", "mojeek"],
+        "engines": ["duckduckgo"],
         "timestamp": datetime.now().isoformat(),
         "total_runs": len(UF_RUNS),
     }
@@ -608,7 +606,7 @@ async def start_pipeline(request: ScrapeRequest, background_tasks: BackgroundTas
     """
     Start the FINDME pipeline: URL Finder -> Email Crawler.
 
-    1. Searches queries across DuckDuckGo, Startpage, Mojeek
+    1. Searches queries across DuckDuckGo
     2. If `cities` is provided, queries with `{city}` expand across all cities
     3. If `pre_formed_queries: true`, queries are used as-is (no placeholders)
     4. Retries up to `max_retries` times if under `min_unique_results`
@@ -841,12 +839,11 @@ async def get_crawl_status(run_id: str):
 @app.get("/sheets", summary="List all sheet tabs", tags=["Google Sheets"])
 async def get_sheets():
     try:
-        ss = ec_get_spreadsheet()
-        sheets = [ws.title for ws in ss.worksheets()]
+        stats = ec_get_stats()
         return {
-            "spreadsheet_id": ec_settings.google_spreadsheet_id,
-            "sheets": sheets,
-            "total": len(sheets),
+            "database": ec_settings.db_name,
+            "host": ec_settings.db_host,
+            "stats": stats,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

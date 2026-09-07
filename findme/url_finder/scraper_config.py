@@ -32,7 +32,7 @@ class Config:
 
     @property
     def search_engines(self) -> list[str]:
-        return self._config.get("SEARCH_ENGINES", ["duckduckgo", "startpage", "mojeek"])
+        return self._config.get("SEARCH_ENGINES", ["duckduckgo"])
 
     @property
     def max_results_per_query(self) -> int:
