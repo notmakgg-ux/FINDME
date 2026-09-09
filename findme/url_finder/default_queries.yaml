@@ -13,78 +13,193 @@ MAX_RETRIES: 3
 # Search queries - many variations to maximize unique results
 # {location} is replaced with the LOCATION value above.
 SEARCH_QUERIES:
-  # Core queries
+  # =============================================================================
+  # Core real estate company/agency/firm queries
+  # =============================================================================
   - "real estate company {location}"
-  - "realty company {location}"
-  - "real estate brokerage {location}"
-  - "property management company {location}"
   - "real estate agency {location}"
+  - "real estate firm {location}"
+  - "realty company {location}"
+  - "realty agency {location}"
+  - "real estate brokerage {location}"
+  - "real estate broker {location}"
+  - "real estate group {location}"
+  - "property company {location}"
+  - "property agency {location}"
+  - "property management company {location}"
   - "commercial real estate company {location}"
+  - "commercial property agents {location}"
   - "residential real estate company {location}"
   - "real estate developer {location}"
-  - "property dealer {location}"
-  - "real estate firm {location}"
-  # Neighborhood / area variants
-  - "real estate agents {location}"
-  - "realtors {location}"
-  - "real estate brokers {location}"
-  - "home buyers company {location}"
-  - "property investors {location}"
-  # Industry-specific
-  - "luxury real estate {location}"
-  - "apartment rental company {location}"
-  - "commercial property management {location}"
-  - "real estate consulting firm {location}"
-  - "land development company {location}"
-  # Action-oriented
-  - "sell my house {location}"
-  - "buy property {location}"
-  - "real estate listings {location}"
-  - "new construction homes {location}"
-  - "property appraisal company {location}"
-  # Additional coverage queries
-  - "estate agents {location}"
-  - "property services {location}"
-  - "residential real estate {location}"
-  - "property sales agency {location}"
-  - "house sales agents {location}"
-  - "commercial property agency {location}"
-  - "commercial property company {location}"
-  - "commercial leasing agents {location}"
-  - "property management agency {location}"
-  - "property managers {location}"
-  - "rental property management {location}"
-  - "rental management agency {location}"
+  - "property developer {location}"
   - "property investment company {location}"
   - "real estate investment company {location}"
-  - "property investment advisory {location}"
-  - "luxury property agents {location}"
-  - "waterfront property agents {location}"
-  - "real estate developer {location}"
-  - "property developer {location}"
-  - "property development company {location}"
-  - "land development company {location}"
-  - "apartment rental agency {location}"
-  - "residential leasing agents {location}"
-  - "property appraisal company {location}"
-  - "property valuation company {location}"
-  - "real estate consulting firm {location}"
-  - "property consultants {location}"
-  - "real estate advisory {location}"
-  - "local real estate agents {location}"
-  - "best real estate agents {location}"
+  - "luxury real estate agency {location}"
   - "independent real estate agency {location}"
-  - "family owned real estate agency {location}"
   - "boutique real estate agency {location}"
-  - "property specialists {location}"
-  - "new homes {location}"
-  - "new developments {location}"
+  - "local real estate agents {location}"
+  - "real estate firms {location}"
+  - "real estate business {location}"
+  - "real estate businesses {location}"
+  - "real estate companies {location}"
+  - "realty firm {location}"
+  - "realty firms {location}"
+  - "realty agencies {location}"
+  - "realty group {location}"
+  - "realty groups {location}"
 
-# Search engines to use
+  # =============================================================================
+  # Property company/agency/firm/group variants (plural + singular)
+  # =============================================================================
+  - "property agencies {location}"
+  - "property firm {location}"
+  - "property firms {location}"
+  - "property companies {location}"
+  - "property group {location}"
+  - "property groups {location}"
+
+  # =============================================================================
+  # Broker / brokerage queries
+  # =============================================================================
+  - "real estate brokers {location}"
+  - "real estate brokerage firm {location}"
+  - "real estate brokerage firms {location}"
+  - "property broker {location}"
+  - "property brokers {location}"
+  - "property brokerage {location}"
+  - "property brokerage firm {location}"
+
+  # =============================================================================
+  # Consultant / consultancy queries
+  # =============================================================================
+  - "real estate consultant {location}"
+  - "real estate consultants {location}"
+  - "real estate consultancy {location}"
+  - "property consultant {location}"
+  - "property consultants {location}"
+  - "property consultancy {location}"
+
+  # =============================================================================
+  # Sales queries
+  # =============================================================================
+  - "real estate sales {location}"
+  - "property sales {location}"
+  - "property sales company {location}"
+  - "property sales agent {location}"
+  - "property sales agents {location}"
+  - "real estate sales agent {location}"
+  - "real estate sales agents {location}"
+
+  # =============================================================================
+  # Residential property queries
+  # =============================================================================
+  - "residential property agents {location}"
+  - "residential property agency {location}"
+  - "residential property brokerage {location}"
+  - "residential property broker {location}"
+
+  # =============================================================================
+  # Commercial property queries
+  # =============================================================================
+  - "commercial property agency {location}"
+  - "commercial property brokerage {location}"
+  - "commercial property broker {location}"
+  - "commercial property brokers {location}"
+  - "commercial real estate agency {location}"
+  - "commercial real estate brokerage {location}"
+
+  # =============================================================================
+  # Rental / letting queries
+  # =============================================================================
+  - "rental agency {location}"
+  - "rental agencies {location}"
+  - "property rental agency {location}"
+  - "property rental agencies {location}"
+  - "rental property agents {location}"
+  - "rental property agency {location}"
+  - "letting agency {location}"
+  - "letting agents {location}"
+
+  # =============================================================================
+  # Leasing queries
+  # =============================================================================
+  - "property leasing company {location}"
+  - "property leasing agency {location}"
+  - "real estate leasing {location}"
+  - "commercial leasing agents {location}"
+  - "residential leasing agents {location}"
+
+  # =============================================================================
+  # Investment queries
+  # =============================================================================
+  - "real estate investment {location}"
+  - "real estate investment firms {location}"
+  - "property investment {location}"
+  - "property investment firms {location}"
+  - "property investment group {location}"
+  - "property investors {location}"
+
+  # =============================================================================
+  # Development queries
+  # =============================================================================
+  - "property development company {location}"
+  - "property development companies {location}"
+  - "real estate development company {location}"
+  - "real estate development firms {location}"
+  - "property developers {location}"
+
+  # =============================================================================
+  # Land queries
+  # =============================================================================
+  - "land development company {location}"
+  - "land property developer {location}"
+  - "land sales agency {location}"
+  - "land real estate agents {location}"
+
+  # =============================================================================
+  # Luxury / premium queries
+  # =============================================================================
+  - "luxury property agents {location}"
+  - "luxury property agency {location}"
+  - "luxury property brokerage {location}"
+  - "premium real estate agency {location}"
+  - "high end real estate {location}"
+
+  # =============================================================================
+  # Independent / local agent queries
+  # =============================================================================
+  - "local property agents {location}"
+  - "independent realtors {location}"
+  - "independent property agents {location}"
+  - "independent real estate brokers {location}"
+
+  # =============================================================================
+  # Franchise / network / partners queries
+  # =============================================================================
+  - "real estate franchise {location}"
+  - "real estate franchise agency {location}"
+  - "real estate network {location}"
+  - "real estate partners {location}"
+
+  # =============================================================================
+  # Auction queries
+  # =============================================================================
+  - "property auction {location}"
+  - "property auction house {location}"
+  - "real estate auction {location}"
+  - "real estate auction company {location}"
+
+  # =============================================================================
+  # Foreclosure / distressed property queries
+  # =============================================================================
+  - "foreclosure real estate {location}"
+  - "foreclosure property agents {location}"
+  - "distressed property buyers {location}"
+  - "distressed property investors {location}"
+
+# Search engines to use — DuckDuckGo only (Playwright/Google/Bing removed)
 SEARCH_ENGINES:
   - duckduckgo
-  - startpage
-  - mojeek
 
 # Results per query per engine
 MAX_RESULTS_PER_QUERY: 25

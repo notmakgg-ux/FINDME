@@ -14,6 +14,9 @@ class DuckDuckGoEngine(BaseEngine):
 
     name = "duckduckgo"
 
+    def __init__(self, request_delay: float = 2.0):
+        self._delay = request_delay
+
     def search(self, query: str, max_results: int = 25) -> list[dict[str, Any]]:
         ddgs = DDGS()
         for attempt in range(3):
@@ -30,7 +33,8 @@ class DuckDuckGoEngine(BaseEngine):
                 ]
             except Exception as e:
                 if attempt < 2:
-                    time.sleep((attempt + 1) * 3 + random.uniform(0, 2))
+                    # Wider backoff for DuckDuckGo rate limiting + respect configured delay
+                    time.sleep((attempt + 1) * max(3, self._delay) + random.uniform(1, 4))
                 else:
                     print(f"    DuckDuckGo failed after 3 attempts: {e}")
                     return []

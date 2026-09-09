@@ -16,7 +16,6 @@ tenacity>=8.0
 python-dotenv>=1.0
 aiosqlite>=0.19
 playwright>=1.40
-crawlee>=1.9
 scrapling>=0.4
 
 # Shared
