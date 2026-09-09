@@ -24,7 +24,6 @@ from utils.priority import prioritize_urls, assign_priority, classify_page_type
 from utils.link_discovery import extract_internal_links
 from utils.deduplication import deduplicate_emails
 from crawler.http_crawler import HTTPCrawler
-from crawler.crawlee_orchestrator import EmailCrawleeOrchestrator
 from crawler.playwright_crawler import render_page
 from crawler.sitemap import discover_sitemap_urls
 from extraction.email_extractor import extract_all_emails
@@ -46,6 +45,8 @@ async def process_companies(
     concurrency: int = 50,
     progress_callback=None,
     batch_callback=None,
+    result_callback=None,
+    control=None,
 ) -> list[CompanyResult]:
     """
     Process all companies through the full pipeline.
@@ -55,6 +56,9 @@ async def process_companies(
         concurrency: max concurrent crawls
         progress_callback: optional callback(current, total, status_message)
         batch_callback: optional callback(results) called after each batch completes
+        result_callback: optional callback(result) called after EACH company finishes
+                        (for real-time per-company DB saves)
+        control: optional ControlEvent for cooperative pause/cancel
     
     Returns:
         list of CompanyResult objects
@@ -62,13 +66,18 @@ async def process_companies(
     results = []
     total = len(companies)
 
-    # Initialize Crawlee orchestrator (macro level)
-    orchestrator = EmailCrawleeOrchestrator()
-
     # Process companies in batches to manage resources
     batch_size = min(concurrency, 10)
     
     for i in range(0, total, batch_size):
+        if control:
+            if not control.check():
+                logger.info("Email Crawler: Stop requested before batch, halting.")
+                break
+            if not await control.wait_async_if_paused():
+                logger.info("Email Crawler: Stop requested while paused, halting.")
+                break
+
         batch = companies[i:i + batch_size]
         tasks = []
         
@@ -90,7 +99,7 @@ async def process_companies(
                 result = await task
                 results.append(result)
                 contacts = result.emails_found + result.phones_found + result.social_links_found
-                status = f"✓ {name}: {result.emails_found} emails, {result.phones_found} phones, {result.social_links_found} social" if contacts else f"✗ {name}: no contacts"
+                status = f"[OK] {name}: {result.emails_found} emails, {result.phones_found} phones, {result.social_links_found} social" if contacts else f"[--] {name}: no contacts"
                 logger.info(status)
             except asyncio.TimeoutError:
                 logger.warning(f"Timeout processing {name}")
@@ -113,6 +122,13 @@ async def process_companies(
                     stage_failed="pipeline",
                 ))
 
+            # Real-time per-company callback — save to DB as soon as each company finishes
+            if result_callback:
+                try:
+                    result_callback(results[-1])
+                except Exception as e:
+                    logger.warning(f"Result callback error for {name}: {e}")
+
             if progress_callback:
                 progress_callback(len(results), total, f"Processed {name}")
 
@@ -122,11 +138,6 @@ async def process_companies(
                 batch_callback(results)
             except Exception as e:
                 logger.warning(f"Batch callback error: {e}")
-
-    # Log orchestrator stats
-    stats = orchestrator.stats
-    logger.info(f"Crawlee orchestrator stats: {stats}")
-    await orchestrator.close()
 
     return results
 
@@ -182,7 +193,7 @@ async def _process_single_company(
         # Discover sitemap URLs
         sitemap_urls = []
         try:
-            sitemap_urls = await discover_sitemap_urls(base_url, http_crawler._client or await http_crawler._get_client())
+            sitemap_urls = await discover_sitemap_urls(base_url, httpx_client=await http_crawler._get_httpx_client())
             logger.info(f"[{company_name}] Found {len(sitemap_urls)} URLs from sitemaps")
         except Exception as e:
             logger.debug(f"[{company_name}] Sitemap discovery failed: {e}")

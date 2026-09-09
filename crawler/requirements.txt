@@ -15,6 +15,5 @@ gspread>=5.0
 google-auth>=2.0
 fastapi>=0.110.0
 uvicorn[standard]>=0.27.0
-crawlee>=1.9
 scrapling>=0.4
 psycopg2-binary>=2.9

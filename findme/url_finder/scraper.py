@@ -1,4 +1,4 @@
-"""Multi-engine scraper: searches multiple search engines for real estate company websites."""
+"""Single-engine scraper: searches DuckDuckGo for real estate company websites."""
 
 import time
 import random
@@ -111,7 +111,7 @@ def _score_result(url: str, title: str, snippet: str, location: str) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Engine registry
+# Engine registry — DuckDuckGo only
 # ---------------------------------------------------------------------------
 
 ENGINE_MAP = {
@@ -124,7 +124,6 @@ ENGINE_MAP = {
 # ---------------------------------------------------------------------------
 
 # Extra query templates used in retry rounds to find more unique results.
-# Each round picks a different set so we don't re-hit the same results.
 _RETRY_QUERY_TEMPLATES = [
     # Round 2 — area/suburb/neighborhood variants
     [
@@ -145,19 +144,13 @@ _RETRY_QUERY_TEMPLATES = [
         "real estate investing {location}",
         "landlord services {location}",
         "property development {location}",
-        "strata management {location}",
-        "body corporate {location}",
         "real estate valuation {location}",
         "property appraisal {location}",
-        "real estate photography {location}",
         "home staging company {location}",
-        "property conveyancing {location}",
-        "real estate marketing {location}",
     ],
     # Round 3 — long-tail / niche / alternative terms
     [
         "independent real estate agency {location}",
-        "family real estate agency {location}",
         "boutique real estate {location}",
         "local realtor {location}",
         "property sales {location}",
@@ -167,41 +160,33 @@ _RETRY_QUERY_TEMPLATES = [
         "real estate office {location}",
         "new home builder {location}",
         "custom home builder {location}",
-        "property restoration {location}",
-        "roofing company {location}",
         "home inspection {location}",
-        "pest control {location}",
-        "landscaping company {location}",
-        "HVAC company {location}",
-        "plumbing company {location}",
-        "electrical contractor {location}",
-        "general contractor {location}",
         "home renovation {location}",
         "kitchen remodeling {location}",
-        "bathroom remodeling {location}",
-        "flooring company {location}",
-        "painting company {location}",
+        "general contractor {location}",
     ],
 ]
 
 
 class RealEstateScraper:
-    """Multi-engine scraper for real estate company websites."""
+    """Playwright-based scraper for real estate company websites."""
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, on_new_result=None, control=None):
         self.config = config
         self.found_urls: dict[str, dict[str, Any]] = {}
+        self.seen_domains: set[str] = set()           # FIX #1: O(1) domain dedup
         self.engine_stats: dict[str, int] = {}
+        self.on_new_result = on_new_result
+        self.control = control
 
     def _init_engines(self) -> list:
         engines = []
-        engine_names = self.config.search_engines
-        for name in engine_names:
+        for name in self.config.search_engines:
             cls = ENGINE_MAP.get(name)
             if cls:
-                engines.append(cls())
+                engines.append(cls(request_delay=self.config.request_delay))
         if not engines:
-            engines = [DuckDuckGoEngine()]
+            engines = [DuckDuckGoEngine(request_delay=self.config.request_delay)]
         return engines
 
     def _run_queries(self, queries: list[str], engines: list, max_per: int) -> int:
@@ -214,6 +199,15 @@ class RealEstateScraper:
             print(f"\n  --- Engine: {engine.name.upper()} ---\n")
 
             for i, query in enumerate(queries, 1):
+                # Cooperative stop / pause check
+                if self.control:
+                    if not self.control.check():
+                        print("  [URL Finder: Stop requested, exiting query loop]")
+                        return new_count
+                    if not self.control.wait_sync_if_paused():
+                        print("  [URL Finder: Stop requested while paused, exiting]")
+                        return new_count
+
                 run_num += 1
                 short_query = query[:50]
                 print(f"  [{run_num}/{total_runs}] {short_query}")
@@ -224,6 +218,9 @@ class RealEstateScraper:
                     skipped = 0
 
                     for r in results:
+                        if self.control and not self.control.check():
+                            return new_count
+
                         url = r.get("url", "")
                         if not url:
                             continue
@@ -233,13 +230,15 @@ class RealEstateScraper:
                             skipped += 1
                             continue
 
-                        score = _score_result(url, r.get("title", ""), r.get("snippet", ""), self.config.location)
+                        score = _score_result(
+                            url, r.get("title", ""), r.get("snippet", ""), self.config.location
+                        )
                         if score < self.config.min_score:
                             skipped += 1
                             continue
 
-                        # Deduplicate by domain
-                        if domain in [self._get_domain(u) for u in self.found_urls]:
+                        # FIX #1: O(1) domain dedup using seen_domains set
+                        if domain in self.seen_domains:
                             continue
 
                         if url not in self.found_urls:
@@ -254,22 +253,44 @@ class RealEstateScraper:
                                 "score": score,
                                 "found_at": datetime.now().isoformat(),
                             }
+                            self.seen_domains.add(domain)   # track domain
                             count += 1
+                            new_count += 1
 
-                    self.engine_stats[engine.name] = self.engine_stats.get(engine.name, 0) + count
-                    new_count += count
+                            # Real-time callback — save each new URL to DB immediately
+                            if self.on_new_result:
+                                try:
+                                    self.on_new_result(self.found_urls[url])
+                                except Exception as e:
+                                    print(f"           [realtime save error: {e}]")
+
+                    self.engine_stats[engine.name] = (
+                        self.engine_stats.get(engine.name, 0) + count
+                    )
                     print(f"           -> +{count} new ({len(self.found_urls)} total) | skipped: {skipped}")
 
                 except Exception as e:
                     print(f"           -> Error: {e}")
 
+                # Delay between queries (cooperative sleep)
+                # DuckDuckGo rate-limits aggressively, so use a wider jitter band.
                 if i < len(queries) or engine != engines[-1]:
-                    delay = self.config.request_delay + random.uniform(0, 1)
-                    time.sleep(delay)
+                    delay = self.config.request_delay + random.uniform(2, 5)
+                    slept = 0.0
+                    while slept < delay:
+                        if self.control:
+                            if not self.control.check():
+                                return new_count
+                            if not self.control.wait_sync_if_paused():
+                                return new_count
+                        step = min(0.2, delay - slept)
+                        time.sleep(step)
+                        slept += step
 
         return new_count
 
-    async def run(self) -> list[dict[str, Any]]:
+    def run(self) -> list[dict[str, Any]]:  # FIX #2: sync, not async
+        """Run the scraper synchronously and return found URLs."""
         queries = self.config.search_queries
         engines = self._init_engines()
         max_per = self.config.max_results_per_query
@@ -277,7 +298,7 @@ class RealEstateScraper:
         max_retries = self.config.max_retries
 
         print(f"\n{'=' * 60}")
-        print(f"  REAL ESTATE COMPANY SCRAPER")
+        print(f"  REAL ESTATE COMPANY SCRAPER  (DuckDuckGo)")
         print(f"{'=' * 60}")
         print(f"  Location:       {self.config.location}")
         print(f"  Queries:        {len(queries)}")
@@ -286,13 +307,19 @@ class RealEstateScraper:
         print(f"  Max retries:    {max_retries}")
         print(f"{'=' * 60}\n")
 
-        # === Round 1: primary queries ===
+        # === Round 1: primary queries ===   FIX #10: store return value
         print(f"\n  === ROUND 1: Primary queries ({len(queries)} queries) ===")
-        self._run_queries(queries, engines, max_per)
-        print(f"\n  Round 1 complete: {len(self.found_urls)} unique URLs found")
+        round1_count = self._run_queries(queries, engines, max_per)
+        print(f"\n  Round 1 complete: {len(self.found_urls)} unique URLs found (+{round1_count} new)")
 
         # === Retry rounds if under target ===
         for attempt in range(max_retries):
+            if self.control and not self.control.check():
+                print("  [URL Finder: Stop requested, skipping retry rounds]")
+                break
+            if self.control and not self.control.wait_sync_if_paused():
+                break
+
             if len(self.found_urls) >= target:
                 break
 
@@ -305,7 +332,6 @@ class RealEstateScraper:
                     for q in _RETRY_QUERY_TEMPLATES[attempt]
                 ]
             else:
-                # Shuffle and remix existing queries with location variations
                 retry_queries = self._generate_variant_queries(queries)
 
             print(f"  Running {len(retry_queries)} retry queries...")
@@ -313,11 +339,12 @@ class RealEstateScraper:
             print(f"\n  Round {attempt + 2} complete: +{new} new | Total: {len(self.found_urls)} unique URLs")
 
             if new == 0:
-                print(f"  No new results found. Stopping retries.")
+                print("  No new results found. Stopping retries.")
                 break
 
-            # Small pause between rounds
-            time.sleep(2)
+            if self.control and not self.control.check():
+                break
+            time.sleep(1)
 
         results = list(self.found_urls.values())
         results.sort(key=lambda x: x.get("score", 0), reverse=True)
@@ -325,7 +352,7 @@ class RealEstateScraper:
         print(f"\n{'=' * 60}")
         print(f"  DONE -- {len(results)} unique company websites found")
         if len(results) < target:
-            print(f"  Note: Below target of {target} — search engines exhausted for this location")
+            print(f"  Note: Below target of {target} — search exhausted for this location")
         print(f"  Engine breakdown:")
         for eng, cnt in self.engine_stats.items():
             print(f"    {eng}: {cnt} URLs")
@@ -337,24 +364,17 @@ class RealEstateScraper:
         """Generate variant queries by shuffling and recombining base queries."""
         location = self.config.location
         variants = []
-        # Split location into parts for shorter queries
         parts = [p.strip() for p in location.replace(".", "").split(",")]
         city = parts[0] if parts else location
-        state = parts[1] if len(parts) > 1 else ""
 
-        # Add city-only and state-only variants
         suffixes = ["area", "metro", "county", "region", "district", "suburbs"]
         for suffix in suffixes:
             variants.append(f"real estate company {city} {suffix}")
             variants.append(f"property management {city} {suffix}")
             variants.append(f"realtor {city} {suffix}")
 
-        # Reuse some base queries with different ordering
         shuffled = base_queries[:]
         random.shuffle(shuffled)
         variants.extend(shuffled[:10])
 
         return variants[:25]
-
-    def _get_domain(self, url: str) -> str:
-        return _get_domain(url)

@@ -27,8 +27,10 @@ class Config:
 
     @property
     def search_queries(self) -> list[str]:
-        raw = self._config.get("SEARCH_QUERIES", [])
-        return [q.replace("{location}", self.location) for q in raw]
+        # Queries are pre-substituted by url_finder_runner before being stored
+        # in the config YAML, so return them as-is (no further replacement).
+        return self._config.get("SEARCH_QUERIES", [])
+
 
     @property
     def search_engines(self) -> list[str]:

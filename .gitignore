@@ -57,3 +57,9 @@ node_modules/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Runtime queue/state (regenerated each run)
+crawler/storage/queue.json
+crawler/storage/runs_history.json
+locations.txt
+batch_run.log

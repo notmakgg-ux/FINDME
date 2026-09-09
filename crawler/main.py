@@ -158,9 +158,8 @@ async def main():
 
     elapsed = (datetime.now() - start_time).total_seconds()
 
-    # --- Write results to PostgreSQL ---
-    print("\nWriting results to PostgreSQL...")
-    write_results(results)
+    # --- Final DB save (batch_callback already saved incrementally) ---
+    # Skipping redundant write_results(results) to avoid duplicate contact rows
 
     # --- Save CSV and JSON locally (backup) ---
     output_dir = Path(__file__).parent / "output"

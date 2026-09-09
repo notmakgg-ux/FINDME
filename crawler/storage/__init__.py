@@ -21,6 +21,15 @@ from storage.db import (
     get_all_companies,
     get_stats,
     upsert_company_result,
+    enqueue_run,
+    enqueue_locations_batch,
+    get_queue_items,
+    delete_queue_item,
+    update_queue_item_status,
+    reorder_queue,
+    get_pipeline_runs,
+    get_pipeline_run,
+    upsert_pipeline_run,
 )
 
 # CSV writer (still available for local file exports)
@@ -45,15 +54,27 @@ def read_input_companies(table_name: str = "company_details") -> list[dict]:
     Read companies from PostgreSQL database or a CSV file.
     
     Supports multiple input formats:
-    1. PostgreSQL company_details table
+    1. PostgreSQL company_details table (optionally filtered by location)
     2. CSV file in input/ directory
+    
+    The table_name parameter doubles as a location filter:
+    - If it matches a known location column value, only those companies are returned.
+    - Otherwise, all companies are returned.
     """
     # Try PostgreSQL first
     try:
         from storage.db import _get_connection
         conn = _get_connection()
         cur = conn.cursor()
-        cur.execute("SELECT company_name, website_url, snippet, location FROM company_details ORDER BY company_id")
+        # Filter by location if a non-default location is specified
+        if table_name and table_name != "company_details":
+            cur.execute(
+                "SELECT company_name, website_url, snippet, location FROM company_details "
+                "WHERE location ILIKE %s ORDER BY company_id",
+                (f"%{table_name}%",)
+            )
+        else:
+            cur.execute("SELECT company_name, website_url, snippet, location FROM company_details ORDER BY company_id")
         rows = cur.fetchall()
         cur.close()
         conn.close()

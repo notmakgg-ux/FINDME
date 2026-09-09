@@ -45,6 +45,7 @@ class HTTPCrawler:
             self._httpx_client = httpx.AsyncClient(
                 timeout=httpx.Timeout(settings.http_timeout, connect=10),
                 follow_redirects=settings.http_follow_redirects,
+                verify=settings.verify_ssl,
                 limits=httpx.Limits(
                     max_connections=settings.max_concurrent_requests,
                     max_keepalive_connections=20,

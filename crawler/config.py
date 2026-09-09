@@ -5,6 +5,18 @@ All settings loaded from .env file with sensible defaults.
 
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Try multiple candidate paths for .env
+for _env_path in [
+    Path(__file__).parent.parent / ".env",
+    Path(__file__).parent / ".env",
+    Path.cwd() / ".env",
+]:
+    if _env_path.exists():
+        load_dotenv(_env_path, override=True)
+        break
+
 from pydantic_settings import BaseSettings
 from pydantic import Field
 
@@ -58,18 +70,80 @@ class Settings(BaseSettings):
     db_port: int = Field(default=5432, description="PostgreSQL port")
     db_name: str = Field(default="findme", description="PostgreSQL database name")
     db_user: str = Field(default="postgres", description="PostgreSQL user")
-    db_password: str = Field(default="", description="PostgreSQL password")
+    db_password: str = Field(default="1234", description="PostgreSQL password")
     db_auto_create: bool = Field(default=True, description="Auto-create tables on startup")
 
     # --- Paths ---
     input_dir: Path = Field(default=Path("input"), description="Input directory")
     output_dir: Path = Field(default=Path("output"), description="Output directory")
 
-    model_config = {"env_file": "../.env", "env_file_encoding": "utf-8"}
+    # --- SSL ---
+    verify_ssl: bool = Field(default=False, description="Verify SSL certificates (set False for sites with expired certs)")
+
+    # --- Google Sheets (optional) ---
+    google_sa_key_path: str = Field(default="", description="Google service account JSON key path")
+    google_spreadsheet_id: str = Field(default="", description="Google Spreadsheet ID")
+
+    # --- Sheet Tab Names ---
+    input_sheet: str = Field(default="Input", description="Sheet tab for input companies")
+    results_sheet: str = Field(default="Results", description="Sheet tab for results")
+    summary_sheet: str = Field(default="Summary", description="Sheet tab for summary")
+
+    # --- URL Finder Settings ---
+    min_unique_results: int = Field(default=300, description="Min unique search results")
+    max_retries_scraper: int = Field(default=3, description="Max retry rounds for URL Finder scraper (Round 1 + up to 3 retry rounds)")
+    request_delay: float = Field(default=2, description="Delay between requests in seconds")
+    min_score: int = Field(default=1, description="Minimum score threshold")
+
+    model_config = {
+        "env_file": [
+            str(Path(__file__).parent.parent / ".env"),
+            str(Path(__file__).parent / ".env"),
+            ".env",
+        ],
+        "extra": "ignore",
+    }
 
 
 # Global settings instance
 settings = Settings()
+
+USER_SETTINGS_PATH = Path(__file__).parent / "user_settings.json"
+
+def load_persisted_settings(s: Settings) -> None:
+    """Load settings from user_settings.json if it exists."""
+    import json
+    if USER_SETTINGS_PATH.exists():
+        try:
+            with open(USER_SETTINGS_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            for k, v in data.items():
+                if hasattr(s, k) and v is not None:
+                    setattr(s, k, v)
+        except Exception as e:
+            pass
+
+def save_persisted_settings(updates: dict) -> dict:
+    """Save user settings updates to disk and apply them to settings."""
+    import json
+    USER_SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    current = {}
+    if USER_SETTINGS_PATH.exists():
+        try:
+            with open(USER_SETTINGS_PATH, "r", encoding="utf-8") as f:
+                current = json.load(f)
+        except Exception:
+            current = {}
+    for k, v in updates.items():
+        if v is not None:
+            current[k] = v
+            if hasattr(settings, k):
+                setattr(settings, k, v)
+    with open(USER_SETTINGS_PATH, "w", encoding="utf-8") as f:
+        json.dump(current, f, indent=2)
+    return current
+
+load_persisted_settings(settings)
 
 
 # --- Priority URL Keywords ---
