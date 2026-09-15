@@ -387,30 +387,25 @@ def main():
 
         # Enqueue only locations that are not already queued/completed/running.
         # This makes repeated batch invocations idempotent (no duplicate queue entries).
-        from storage.db import enqueue_locations_batch, get_queue_items as _get_all_queue
+        from storage.db import enqueue_locations_batch
 
-        existing = _get_all_queue()
-        existing_locs = {(q["location"].strip().lower(), q["status"]) for q in existing}
-        new_locations = [
-            loc for loc in locations
-            if (loc.strip().lower(), "queued") not in existing_locs
-            and (loc.strip().lower(), "running") not in existing_locs
-            and (loc.strip().lower(), "completed") not in existing_locs
-        ]
-
-        if not new_locations:
+        # Dedup (including 'completed' rows) is handled inside enqueue_locations_batch.
+        queue_ids, skipped = enqueue_locations_batch(
+            locations=locations,
+            enable_url_finder=True,
+            enable_email_crawler=not args.skip_crawler,
+            min_results=args.min_results,
+        )
+        for loc in skipped:
+            print(f"   • {loc}  (already queued/running/completed — skipped)")
+        if not queue_ids:
             print("\n✅  All requested locations are already queued, running, or completed. Nothing to enqueue.")
         else:
-            queue_ids = enqueue_locations_batch(
-                locations=new_locations,
-                enable_url_finder=True,
-                enable_email_crawler=not args.skip_crawler,
-                min_results=args.min_results,
-            )
             print(f"\n✅  Enqueued {len(queue_ids)} new pipeline run(s) into the sequential queue.")
             print("   Queue IDs:", ", ".join(str(qid) for qid in queue_ids))
-            for loc in new_locations:
-                print(f"   • {loc}")
+            for loc in locations:
+                if loc not in skipped:
+                    print(f"   • {loc}")
 
         if args.queue_only:
             print("   (--queue-only) Exiting now — the queue runner will process them sequentially.")

@@ -705,6 +705,69 @@ def enqueue_run(item: dict) -> int:
         return next_id
 
 
+def _get_location_queue_status(locations: list[str]) -> dict[str, str]:
+    """Map lowercase location -> pipeline_queue status for the given locations.
+
+    Reads ALL rows (not just active ones) so callers can dedup against
+    completed runs too. Falls back to the JSON queue file if the DB is
+    unreachable (the JSON file may not contain completed rows, so the DB is
+    authoritative when available).
+    """
+    wanted = {str(loc).strip().lower() for loc in locations if loc and str(loc).strip()}
+    status_map: dict[str, str] = {}
+    try:
+        conn = _get_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT location, status FROM pipeline_queue")
+        for loc, status in cur.fetchall():
+            key = str(loc).strip().lower()
+            if key in wanted:
+                status_map[key] = status
+        cur.close()
+        conn.close()
+    except Exception as e:
+        logger.debug(f"_get_location_queue_status fell back to JSON queue: {e}")
+        for q in _read_json_file(_QUEUE_FILE):
+            key = str(q.get("location", "")).strip().lower()
+            if key in wanted:
+                status_map[key] = q.get("status", "")
+    return status_map
+
+
+def requeue_running_locations() -> list[int]:
+    """Reset pipeline_queue rows stuck at status='running' back to 'queued'.
+
+    Call when no pipeline process is alive (fresh start / after a crash) so
+    the runner picks those locations up again instead of skipping them.
+    Returns the queue_ids that were requeued.
+    """
+    # JSON fallback queue first
+    requeued: list[int] = []
+    queue = _read_json_file(_QUEUE_FILE)
+    changed = False
+    for q in queue:
+        if q.get("status") == "running":
+            q["status"] = "queued"
+            requeued.append(q.get("queue_id"))
+            changed = True
+    if changed:
+        _write_json_file(_QUEUE_FILE, queue)
+    # PostgreSQL is authoritative when reachable
+    try:
+        conn = _get_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT queue_id FROM pipeline_queue WHERE status = 'running'")
+        requeued = [row[0] for row in cur.fetchall()]
+        if requeued:
+            cur.execute("UPDATE pipeline_queue SET status = 'queued' WHERE status = 'running'")
+            conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        logger.error(f"requeue_running_locations failed: {e}")
+    return requeued
+
+
 def enqueue_locations_batch(
     locations: list[str],
     enable_url_finder: bool = True,
@@ -712,16 +775,32 @@ def enqueue_locations_batch(
     min_results: int = 300,
     queries: Optional[list[str]] = None,
     cities: Optional[list[str]] = None,
-) -> list[int]:
+) -> tuple[list[int], list[str]]:
     """Bulk-queue one full pipeline run per location (URL Finder + Email Crawler).
 
     Each location becomes its own queue item. The QueueManager runs them
     sequentially in priority/created order — when one finishes, the next starts.
 
-    Returns the list of queue_ids created.
+    Idempotent: locations already present in pipeline_queue with status
+    'queued', 'running', or 'completed' are skipped, so re-submitting the
+    same list (e.g. after a restart) never creates duplicate rows.
+
+    Returns (queue_ids_created, skipped_locations).
     """
     if not locations:
-        return []
+        return [], []
+
+    existing_status = _get_location_queue_status(locations)
+    skipped: list[str] = [
+        loc for loc in locations
+        if existing_status.get(str(loc).strip().lower()) in ("queued", "running", "completed")
+    ]
+    locations = [
+        loc for loc in locations
+        if existing_status.get(str(loc).strip().lower()) not in ("queued", "running", "completed")
+    ]
+    if not locations:
+        return [], skipped
 
     added: list[int] = []
     base_queue = _read_json_file(_QUEUE_FILE)
@@ -755,12 +834,14 @@ def enqueue_locations_batch(
     try:
         conn = _get_connection()
         cur = conn.cursor()
+        db_ids: list[int] = []
         for qid, loc in zip(added, [l.strip() for l in locations if l.strip()]):
             cur.execute("""
                 INSERT INTO pipeline_queue (
                     location, enable_url_finder, enable_email_crawler,
                     min_results, queries, cities, scheduled_at, priority, status
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING queue_id
             """, (
                 loc,
                 enable_url_finder,
@@ -772,13 +853,27 @@ def enqueue_locations_batch(
                 len(base_queue) - len(added) + added.index(qid),
                 "queued",
             ))
+            db_ids.append(cur.fetchone()[0])
         conn.commit()
         cur.close()
         conn.close()
+
+        # Realign the JSON fallback file's ids with the DB-assigned ids so
+        # status updates (which key on queue_id) keep matching if the DB ever
+        # becomes unreachable and the JSON file takes over.
+        id_map = dict(zip(added, db_ids))
+        json_queue = _read_json_file(_QUEUE_FILE)
+        other_ids = {q.get("queue_id") for q in json_queue} - set(added)
+        if not (set(db_ids) & other_ids):
+            for q in json_queue:
+                if q.get("queue_id") in id_map:
+                    q["queue_id"] = id_map[q["queue_id"]]
+            _write_json_file(_QUEUE_FILE, json_queue)
+        added = db_ids
     except Exception as e:
         logger.debug(f"DB enqueue_locations_batch: {e}")
 
-    return added
+    return added, skipped
 
 
 def get_queue_items() -> list[dict]:
