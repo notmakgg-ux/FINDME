@@ -24,6 +24,7 @@ hung or crashed runs.
 </details>
 
 ---
+**For further, more detailed instructions, check out [INTRUCTIONS.md](INTRUCTIONS.md).**
 
 ## How it works
 
@@ -275,6 +276,14 @@ and reboots; killing the process is safe — completed locations never re-run.
 
 ---
 
+
+
+
+
 **Timing expectations:** URL Finder ≈ 3–6 min per location; Email Crawler ≈ 10–30+ min
 depending on concurrency and site response times. A 100-location batch takes hours to a
 few days — results land in the DB continuously, so partial data is usable at any time.
+
+
+
+**For further, more detailed instructions, check out [INTRUCTIONS.md](INTRUCTIONS.md).**
