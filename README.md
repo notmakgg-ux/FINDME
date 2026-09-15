@@ -24,7 +24,7 @@ hung or crashed runs.
 </details>
 
 ---
-**For further, more detailed instructions, check out [INTRUCTIONS.md](INTRUCTIONS.md).**
+**For further, more detailed instructions, check out [INSTRUCTIONS](Instructions.md).**
 
 ## How it works
 
@@ -285,5 +285,4 @@ depending on concurrency and site response times. A 100-location batch takes hou
 few days — results land in the DB continuously, so partial data is usable at any time.
 
 
-
-**For further, more detailed instructions, check out [INTRUCTIONS.md](INTRUCTIONS.md).**
+**For further, more detailed instructions, check out [INSTRUCTIONS](Instructions.md).**
